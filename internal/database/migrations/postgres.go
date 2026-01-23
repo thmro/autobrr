@@ -96,12 +96,18 @@ func PostgresMigrations(db *sql.DB, logger zerolog.Logger) *migrator.Migrator {
 	migrate.AddFileMigration("72_duplicate_profiles_add_hybrid.sql")
 	migrate.AddFileMigration("73_indexers_update_reelflix_domain.sql")
 	migrate.AddFileMigration("74_indexers_update_aither_irc_auth.sql")
+<<<<<<< HEAD
 	migrate.AddFileMigration("75_create_release_cleanup_job.sql")
 	migrate.AddFileMigration("76_add_notification_sound.sql")
 	migrate.AddFileMigration("77_add_notification_method_headers.sql")
 	migrate.AddFileMigration("78_irc_skip_tls_verify.sql")
 	migrate.AddFileMigration("79_feeds_change_capabilities_to_json.sql")
 	migrate.AddFileMigration("80_feed_add_tls_skip_verify.sql")
+	migrate.AddFileMigration("81_add_filter_max_downloads_interval.sql")
+=======
+	migrate.AddFileMigration("75_add_filter_max_downloads_interval.sql")
+	migrate.AddFileMigration("76_add_filter_max_downloads_window_type.sql")
+>>>>>>> 24a8224f (Adds rolling window functionality)
 
 	return migrate
 }
