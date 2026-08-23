@@ -8,7 +8,6 @@ import (
 	"context"
 	"encoding/xml"
 	"io"
-	"log"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
@@ -18,6 +17,8 @@ import (
 
 	"github.com/autobrr/autobrr/pkg/errors"
 	"github.com/autobrr/autobrr/pkg/sharedhttp"
+
+	"github.com/rs/zerolog"
 )
 
 const DefaultTimeout = 60
@@ -33,7 +34,7 @@ type Client struct {
 
 	Capabilities *Caps
 
-	Log   *log.Logger
+	log   zerolog.Logger
 	Debug bool
 }
 
@@ -59,7 +60,7 @@ type Config struct {
 	BasicAuth     BasicAuth
 	TLSSkipVerify bool
 
-	Log *log.Logger
+	Log zerolog.Logger
 }
 
 type Capabilities struct {
@@ -81,18 +82,12 @@ func NewClient(config Config) *Client {
 		httpClient.Timeout = time.Second * config.Timeout
 	}
 
-	c := &Client{
+	return &Client{
 		http:   httpClient,
 		Host:   config.Host,
 		ApiKey: config.ApiKey,
-		Log:    log.New(io.Discard, "", log.LstdFlags),
+		log:    config.Log,
 	}
-
-	if config.Log != nil {
-		c.Log = config.Log
-	}
-
-	return c
 }
 
 func (c *Client) get(ctx context.Context, params url.Values) (*Feed, error) {
@@ -131,7 +126,7 @@ func (c *Client) get(ctx context.Context, params url.Values) (*Feed, error) {
 			return nil, errors.Wrap(err, "could not dump response")
 		}
 
-		c.Log.Printf("newznab get feed response dump: %q", dump)
+		c.log.Debug().Str("response", string(dump)).Msg("newznab feed response dump")
 	}
 
 	switch resp.StatusCode {
@@ -228,7 +223,7 @@ func (c *Client) GetFeed(ctx context.Context) (*Feed, error) {
 			return nil, errors.Wrap(err, "could not dump response")
 		}
 
-		c.Log.Printf("newznab get feed response dump: %q", dump)
+		c.log.Debug().Str("response", string(dump)).Msg("newznab feed response dump")
 	}
 
 	switch resp.StatusCode {
@@ -257,10 +252,6 @@ func (c *Client) GetFeed(ctx context.Context) (*Feed, error) {
 	if c.Capabilities != nil {
 		for _, item := range response.Channel.Items {
 			item.MapCustomCategoriesFromAttr(c.Capabilities.Categories.Categories)
-		}
-	} else {
-		for _, item := range response.Channel.Items {
-			item.MapCategoriesFromAttr()
 		}
 	}
 
@@ -310,7 +301,7 @@ func (c *Client) getCaps(ctx context.Context) (*Caps, error) {
 			return nil, errors.Wrap(err, "could not dump response")
 		}
 
-		c.Log.Printf("newznab get caps response dump: %q", dump)
+		c.log.Debug().Str("response", string(dump)).Msg("newznab caps response dump")
 	}
 
 	switch resp.StatusCode {
@@ -383,9 +374,11 @@ func (c *Client) Search(ctx context.Context, query string, categories []int) (*S
 		params.Set("limit", strconv.Itoa(c.Capabilities.Limits.Max))
 	}
 
+	cats := make([]string, 0)
 	for _, cat := range categories {
-		params.Add("cat", strconv.Itoa(cat))
+		cats = append(cats, strconv.Itoa(cat))
 	}
+	params.Add("cat", strings.Join(cats, ","))
 
 	res, err := c.get(ctx, params)
 	if err != nil {
@@ -395,10 +388,6 @@ func (c *Client) Search(ctx context.Context, query string, categories []int) (*S
 	if c.Capabilities != nil {
 		for _, item := range res.Channel.Items {
 			item.MapCustomCategoriesFromAttr(c.Capabilities.Categories.Categories)
-		}
-	} else {
-		for _, item := range res.Channel.Items {
-			item.MapCategoriesFromAttr()
 		}
 	}
 

@@ -8,6 +8,7 @@ import { useFormikContext, FieldArray, FieldArrayRenderProps } from "formik";
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { ChevronRightIcon, InformationCircleIcon } from "@heroicons/react/24/solid";
 import { BellIcon } from "@heroicons/react/24/outline";
+import { useTranslation } from "react-i18next";
 
 import { APIClient } from "@api/APIClient";
 import { NotificationKeys } from "@api/query_keys";
@@ -39,18 +40,17 @@ const NOTIFICATION_TYPE_MAP: Record<string, string> = {
 };
 
 export function Notifications() {
+  const { t } = useTranslation("filters");
   const { values } = useFormikContext<Filter>();
 
-  // Fetch all available notifications
   const { data: availableNotifications = [] } = useSuspenseQuery({
     queryKey: NotificationKeys.lists(),
-    queryFn: () => APIClient.notifications.getAll(),
-    select: (data) => data.filter(n => n.enabled)
+    queryFn: () => APIClient.notifications.getAll()
   });
+  const enabledNotifications = availableNotifications.filter(notification => notification.enabled);
 
-  // Create a new notification object
   const createNewNotification = (): FilterNotification => {
-    const firstAvailable = availableNotifications.find(
+    const firstAvailable = enabledNotifications.find(
       n => !values.notifications?.some(sn => sn.notification_id === n.id)
     );
     
@@ -65,7 +65,7 @@ export function Notifications() {
     <div className="mt-5">
       <FieldArray name="notifications">
         {({ remove, push }: FieldArrayRenderProps) => {
-          const availableToAdd = availableNotifications.filter(
+          const availableToAdd = enabledNotifications.filter(
             n => !values.notifications?.some((sn: FilterNotification) => sn.notification_id === n.id)
           );
 
@@ -74,8 +74,8 @@ export function Notifications() {
               <div className="-ml-4 -mt-4 mb-6 flex justify-between items-center flex-wrap sm:flex-nowrap">
                 <TitleSubtitle
                   className="ml-4 mt-4"
-                  title="Filter Notifications"
-                  subtitle="Configure which notifications should be sent for this filter. These override global notification settings."
+                  title={t("notificationsSection.title")}
+                  subtitle={t("notificationsSection.subtitle")}
                 />
                 <div className="ml-4 mt-4 shrink-0">
                   {availableToAdd.length > 0 && (
@@ -85,7 +85,7 @@ export function Notifications() {
                       onClick={() => push(createNewNotification())}
                     >
                       <BellIcon className="w-5 h-5 mr-1" aria-hidden="true" />
-                      Add notification
+                      {t("notificationsSection.addNotification")}
                     </button>
                   )}
                 </div>
@@ -105,7 +105,7 @@ export function Notifications() {
                   ))}
                 </ul>
               ) : (
-                <EmptyListState text="No filter-specific notifications configured. Global notifications will be used." />
+                <EmptyListState text={t("notificationsSection.empty")} />
               )}
             </>
           );
@@ -124,6 +124,7 @@ interface NotificationItemProps {
 }
 
 function NotificationItem({ notification, availableNotifications, idx, initialEdit, remove }: NotificationItemProps) {
+  const { t } = useTranslation("filters");
   const { values, setFieldValue } = useFormikContext<Filter>();
   const cancelButtonRef = useRef(null);
   const [deleteModalIsOpen, toggleDeleteModal] = useToggle(false);
@@ -141,7 +142,6 @@ function NotificationItem({ notification, availableNotifications, idx, initialEd
     setFieldValue(`notifications.${idx}.events`, newEvents);
   };
 
-  // Update notification object when ID changes
   const currentNotificationId = values.notifications?.[idx]?.notification_id;
   useEffect(() => {
     if (currentNotificationId) {
@@ -157,8 +157,8 @@ function NotificationItem({ notification, availableNotifications, idx, initialEd
   );
 
   const availableOptions = availableNotifications
-    .filter(n => n.id === notification.notification_id || 
-      !values.notifications?.some((sn: FilterNotification) => sn.notification_id === n.id))
+    .filter(n => n.id === notification.notification_id || (n.enabled &&
+      !values.notifications?.some((sn: FilterNotification) => sn.notification_id === n.id)))
     .map(n => ({ label: `${n.name} (${NOTIFICATION_TYPE_MAP[n.type] || n.type})`, value: n.id }));
 
   return (
@@ -175,14 +175,15 @@ function NotificationItem({ notification, availableNotifications, idx, initialEd
           <div className="min-w-0 flex-1 sm:flex sm:items-center sm:justify-between">
             <div className="flex text-sm truncate">
               <p className="font-medium text-dark-600 dark:text-gray-100 truncate">
-                {selectedNotification?.name || "Select notification"}
+                {selectedNotification?.name || t("notificationsSection.selectNotification")}
               </p>
             </div>
             <div className="shrink-0 sm:mt-0 sm:ml-5">
               <div className="flex overflow-hidden -space-x-1">
                 <span className="text-sm font-normal text-gray-500 dark:text-gray-400">
                   {NOTIFICATION_TYPE_MAP[selectedNotification?.type || ""] || selectedNotification?.type}
-                  {notification.events?.length === 0 ? " • Muted" : notification.events?.length > 0 ? ` • ${notification.events.length} event${notification.events.length > 1 ? 's' : ''}` : ""}
+                  {selectedNotification && !selectedNotification.enabled ? ` • ${t("notificationsSection.serviceDisabled")}` : ""}
+                  {notification.events?.length === 0 ? ` • ${t("notificationsSection.notificationDisabled")}` : notification.events?.length > 0 ? ` • ${t("notificationsSection.eventsCount", { count: notification.events.length })}` : ""}
                 </span>
               </div>
             </div>
@@ -201,74 +202,72 @@ function NotificationItem({ notification, availableNotifications, idx, initialEd
             buttonRef={cancelButtonRef}
             toggle={toggleDeleteModal}
             deleteAction={removeNotification}
-            title="Remove notification"
-            text="Are you sure you want to remove this notification? This action cannot be undone."
+            title={t("notificationsSection.removeTitle")}
+            text={t("notificationsSection.removeText")}
           />
 
           <FilterPage gap="sm:gap-y-6">
             <FilterSection
-              title="Notification"
-              subtitle="Select the notification service and events to trigger"
+              title={t("notificationsSection.notificationTitle")}
+              subtitle={t("notificationsSection.notificationSubtitle")}
             >
               <FilterLayout>
                 <div className="col-span-12">
                   <Select
                     name={`notifications.${idx}.notification_id`}
-                    label="Notification service"
-                    optionDefaultText="Select a notification"
+                    label={t("notificationsSection.notificationService")}
+                    optionDefaultText={t("notificationsSection.selectNotificationService")}
                     options={availableOptions}
-                    tooltip={<div><p>Select the notification service to use for this filter.</p></div>}
+                    tooltip={<div><p>{t("notificationsSection.notificationServiceTooltip")}</p></div>}
                   />
                 </div>
 
                 <div className="col-span-12">
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-4">
-                    Notification Settings
+                    {t("notificationsSection.notificationSettings")}
                   </label>
                   
-                  {/* Mute Switch */}
                   <div className="mb-6 p-4 rounded-lg bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700">
                     <Checkbox
+                      name={`notifications.${idx}.disabled`}
                       value={notification.events?.length === 0}
-                      setValue={(muted) => {
-                        if (muted) {
-                          // Clear all events to mute
+                      setValue={(disabled) => {
+                        if (disabled) {
                           setFieldValue(`notifications.${idx}.events`, []);
                         } else {
-                          // Enable Push Approved by default when unmuting
                           setFieldValue(`notifications.${idx}.events`, ["PUSH_APPROVED"]);
                         }
                       }}
-                      label="Mute filter"
-                      description="Disable all notifications for this filter. When muted, no notifications will be sent for releases matched by this filter."
+                      label={t("notificationsSection.disableNotification")}
+                      description={t("notificationsSection.disableNotificationDesc")}
                     />
                     
                     {notification.events?.length === 0 && (
                       <div className="mt-3 flex items-start">
                         <InformationCircleIcon className="h-5 w-5 text-yellow-400 flex-shrink-0 mt-0.5" />
                         <p className="ml-2 text-sm text-yellow-700 dark:text-yellow-300">
-                          Filter muted - overrides all global notification settings
+                          {t("notificationsSection.notificationDisabledInfo")}
                         </p>
                       </div>
                     )}
                   </div>
 
-                  {/* Event Triggers - disabled when muted */}
                   <div className={notification.events?.length === 0 ? "opacity-50 pointer-events-none" : ""}>
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                      Trigger events
+                      {t("notificationsSection.triggerEvents")}
                     </label>
                     <div className="space-y-3">
                       {EVENT_OPTIONS.map((event) => (
                         <Checkbox
                           key={event.value}
+                          name={`notifications.${idx}.events-${event.value}`}
                           value={notification.events?.includes(event.value) || false}
                           setValue={(checked) => handleEventToggle(event.value, checked)}
-                          label={event.label}
+                          label={event.value === "PUSH_APPROVED" ? t("notificationsSection.pushApproved") : event.value === "PUSH_REJECTED" ? t("notificationsSection.pushRejected") : t("notificationsSection.pushError")}
                           description={
-                            event.value === "PUSH_APPROVED" ? "Send notification when release is successfully sent to client" :
-                            event.value === "PUSH_REJECTED" ? "Send notification when release is rejected" :
-                            "Send notification when an error occurs while processing"
+                            event.value === "PUSH_APPROVED" ? t("notificationsSection.pushApprovedDesc") :
+                            event.value === "PUSH_REJECTED" ? t("notificationsSection.pushRejectedDesc") :
+                            t("notificationsSection.pushErrorDesc")
                           }
                           disabled={notification.events?.length === 0}
                         />
@@ -285,7 +284,7 @@ function NotificationItem({ notification, availableNotifications, idx, initialEd
                 className="inline-flex items-center justify-center px-4 py-2 rounded-md sm:text-sm bg-red-700 dark:bg-red-900 dark:hover:bg-red-700 hover:bg-red-800 text-white focus:outline-hidden"
                 onClick={toggleDeleteModal}
               >
-                Remove Notification
+                {t("notificationsSection.removeNotification")}
               </button>
 
               <button
@@ -293,7 +292,7 @@ function NotificationItem({ notification, availableNotifications, idx, initialEd
                 className="bg-white dark:bg-gray-700 py-2 px-4 border border-gray-300 dark:border-gray-600 rounded-md shadow-xs text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-hidden"
                 onClick={toggleEdit}
               >
-                Close
+                {t("notificationsSection.close")}
               </button>
             </div>
           </FilterPage>

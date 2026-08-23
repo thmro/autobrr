@@ -5,12 +5,15 @@
 
 import type { StateWithValue } from "react-ridge-state";
 import { newRidgeState } from "react-ridge-state";
+import { getInitialLanguage } from "@app/i18n";
 
 export type Theme = "light" | "dark" | "system";
+export type Language = "en" | "fr" | "de" | "cs" | "no" | "ru" | "es" | "zh-CN";
 
 interface SettingsType {
   debug: boolean;
   theme: Theme;
+  language: Language;
   scrollOnNewLog: boolean;
   indentLogLines: boolean;
   hideWrappedText: boolean;
@@ -29,6 +32,18 @@ export type FilterListState = {
   sortOrder: string;
   status: string;
 };
+
+export interface DashboardWidgetConfig {
+  id: string;
+  hidden: boolean;
+}
+
+// An empty widgets list means "registry defaults"; the dashboard grid
+// reconciles stored entries against the widget registry on render.
+export interface DashboardConfigType {
+  version: number;
+  widgets: DashboardWidgetConfig[];
+}
 
 export interface AuthInfo {
   username: string;
@@ -50,6 +65,7 @@ const AuthContextDefaults: AuthInfo = {
 const SettingsContextDefaults: SettingsType = {
   debug: false,
   theme: "system",
+  language: getInitialLanguage(),
   scrollOnNewLog: false,
   indentLogLines: false,
   hideWrappedText: false,
@@ -60,6 +76,11 @@ const FilterListContextDefaults: FilterListState = {
   indexerFilter: [],
   sortOrder: "",
   status: ""
+};
+
+const DashboardConfigDefaults: DashboardConfigType = {
+  version: 1,
+  widgets: []
 };
 
 // eslint-disable-next-line
@@ -90,6 +111,7 @@ function ContextMerger<T extends {}>(
 const AuthKey = "autobrr_user_auth";
 const SettingsKey = "autobrr_settings";
 const FilterListKey = "autobrr_filter_list";
+const DashboardKey = "autobrr_dashboard";
 
 export const InitializeGlobalContext = () => {
   // Migrate old darkTheme boolean to new theme setting
@@ -118,6 +140,11 @@ export const InitializeGlobalContext = () => {
     FilterListContextDefaults,
     FilterListContext
   );
+  ContextMerger<DashboardConfigType>(
+    DashboardKey,
+    DashboardConfigDefaults,
+    DashboardConfigContext
+  );
 };
 
 function DefaultSetter<T>(name: string, newState: T, prevState: T) {
@@ -136,6 +163,13 @@ export const AuthContext = newRidgeState<AuthInfo>(
   AuthContextDefaults,
   {
     onSet: (newState, prevState) => DefaultSetter(AuthKey, newState, prevState)
+  }
+);
+
+export const DashboardConfigContext = newRidgeState<DashboardConfigType>(
+  DashboardConfigDefaults,
+  {
+    onSet: (newState, prevState) => DefaultSetter(DashboardKey, newState, prevState)
   }
 );
 

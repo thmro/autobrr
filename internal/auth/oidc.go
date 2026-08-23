@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/autobrr/autobrr/internal/domain"
-	"github.com/autobrr/autobrr/internal/logger"
 	"github.com/autobrr/autobrr/pkg/errors"
 
 	"github.com/avast/retry-go"
@@ -30,7 +29,7 @@ type OIDCService struct {
 	oauthConfig *oauth2.Config
 }
 
-func NewOIDCService(log logger.Logger, cfg *domain.Config) *OIDCService {
+func NewOIDCService(log zerolog.Logger, cfg *domain.Config) *OIDCService {
 	return &OIDCService{
 		log: log.With().Str("module", "oidc").Logger(),
 		cfg: cfg,
@@ -219,13 +218,27 @@ func (s *OIDCService) OAuthExchange(ctx context.Context, code string, opts ...oa
 	return s.oauthConfig.Exchange(ctx, code, opts...)
 }
 
-func (s *OIDCService) OauthAuthCodeURL(state string) string {
-	return s.oauthConfig.AuthCodeURL(state)
+func (s *OIDCService) OauthAuthCodeURL(state string, opts ...oauth2.AuthCodeOption) string {
+	return s.oauthConfig.AuthCodeURL(state, opts...)
 }
 
 type Claims struct {
-	AuthURL  string `json:"authorization_endpoint"`
-	TokenURL string `json:"token_endpoint"`
-	JWKSURL  string `json:"jwks_uri"`
-	UserURL  string `json:"userinfo_endpoint"`
+	AuthURL        string   `json:"authorization_endpoint"`
+	TokenURL       string   `json:"token_endpoint"`
+	JWKSURL        string   `json:"jwks_uri"`
+	UserURL        string   `json:"userinfo_endpoint"`
+	CodeChallenges []string `json:"code_challenge_methods_supported"`
+}
+
+func (s *OIDCService) SupportsPKCE() bool {
+	var claims Claims
+	if err := s.provider.Claims(&claims); err != nil {
+		return false
+	}
+	for _, method := range claims.CodeChallenges {
+		if method == "S256" {
+			return true
+		}
+	}
+	return false
 }
